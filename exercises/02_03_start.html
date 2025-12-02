@@ -14,11 +14,24 @@
             stroke: black;
             stroke-width: 2px;
         }
+
+        rect:nth-of-type(3n+1) {
+            fill: blue;
+        }
+
+        rect:nth-of-type(3n+2) {
+            fill: pink;
+        }
+
+        rect:nth-of-type(3n+3) {
+            fill: red;
+        }
+
         text {
             fill:red;
             /* stroke: black;
             stroke-width: 1px; */
-            
+
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -27,7 +40,7 @@
     <script>
         const width = document.documentElement.clientWidth;
         const height = document.documentElement.clientHeight;
-        const dataArray = [5, 11, 16];
+        const dataArray = [5, 11, 16, 5, 2, 5, 8, 11];
         const svg = d3.select("body").append("svg")
             .attr("height", "100%")
             .attr("width", "100%");
@@ -38,8 +51,10 @@
             .data(dataArray)//[5,11,16]
             .enter()//[nn,nn,nn]
             .append("rect")//[rect,rect,rect]
-            .attr("height",50)
-            .attr("width", 50);
+            .attr("height", d => d*15)
+            .attr("width", 50)
+            .attr("x", (d, i) => i*60)
+            .attr("y", d => 400 - (d * 15));
     </script>
 
 </body>
