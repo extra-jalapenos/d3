@@ -10,7 +10,7 @@
             margin: 0;
         }
         svg {
-            background-color: pink; 
+            background-color: pink;
         }
         circle {
             fill: pink;
@@ -21,7 +21,7 @@
             fill:red;
             /* stroke: black;
             stroke-width: 1px; */
-            
+
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -36,7 +36,15 @@
             .attr("width", "100%")
             .attr("viewBox", "0 0 " + width + " " + height)
             .attr("preserveAspectRatio", "xMidYMid meet");
+        // adding rectangles
+        const myArr = [2, 5, 10, 4]
 
+        svg.selectAll("rect") // find all rectangles in the svg const: []
+            .data(myArr) // bind to myArr
+            .enter() // [nn, nn, nn]
+            .append("rect") // makes 3 rect children, empty, in the svg
+            .attr("height", 50)
+            .attr("weight", 50);
     </script>
 
 </body>
