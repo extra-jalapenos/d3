@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Einführung von SVG</title>
+	<style>
+		svg {
+			border: 1px solid black;
+			circle
+		}
+	</style>
+</head>
+
+<body>
+
+</body>
+</html>
