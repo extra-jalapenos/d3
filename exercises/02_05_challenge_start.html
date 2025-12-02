@@ -21,7 +21,7 @@
             fill:red;
             /* stroke: black;
             stroke-width: 1px; */
-            
+
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -35,20 +35,19 @@
         .attr("width", "100%");
         // .attr("viewBox", "0 0 " + width + " " + height)
         // .attr("preserveAspectRatio", "xMidYMid meet");
-        
+
 
 
 
         const dataArray = [5, 11, 16];
 
-        const boundData = svg.selectAll("rect").data(dataArray);
-        const enterSelection = boundData.enter();
-
-        enterSelection.append("rect")
-            .attr("height",d=>d*15)
-            .attr("width", 50)
-            .attr("x", (d,i)=> i*60)
-            .attr("y", d=>400 - (d*15));
+        // add a circle for each datapoint in dataArray, and all of them should be visible
+        const boundData = svg.selectAll("circle").data(dataArray)
+        const entered = boundData.enter()
+        const configure = entered.append("circle")
+            .attr("cx", d => d * 10)
+            .attr("cy", d => d * 20)
+            .attr("r", (d, i) => d)
 
     </script>
 
