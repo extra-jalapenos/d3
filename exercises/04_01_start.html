@@ -22,7 +22,7 @@
             font-size: 32px;
         }
 
-        line {
+        line, path {
             stroke: green;
         }
     </style>
@@ -35,7 +35,10 @@
         const svg = d3.select("body").append("svg")
         .attr("height", "100%")
         .attr("width", "100%");
-        
+
+        svg.append("path")
+            .attr("d", "m 50 50 l 50 0 l 0 50 l -50 0 l 0 -50")
+
         const labelArray = ['Stop','Wait','Go'];
         const colourArray = ['red','orange','green'];
 
