@@ -59,13 +59,11 @@
             .data(["red", "orange", "green"])
             .enter()
             .append("circle")
-            .attr("r", (d) => 25)
+            .attr("r", 25)
             .attr("cx", 110)
             .attr("cy", (d, i) => 110+(i*25*2.5))
             .style("fill", (d, i) => d)
-            .attr("class", "light")
 
     </script>
-
 </body>
 </html>
