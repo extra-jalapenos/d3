@@ -9,7 +9,7 @@
             height: 100%;
             margin: 0;
         }
- 
+
         ellipse {
             fill: blue;
         }
@@ -23,19 +23,17 @@
         }
 
         line, path {
-            /* stroke: green;
-            stroke-width: 5px; */
-            fill: steelblue;
-        }
-
-        .g2 path {
-            fill: pink;
+            stroke-width: px;
+            stroke: green;
+            fill: none;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
     <script>
+    // plot a line chart
+    // use line-generator
 
     const data = [
         { day: 0, temp: 12 },
@@ -63,22 +61,11 @@
         const svg = d3.select("body").append("svg")
         .attr("height", "100%")
         .attr("width", "100%");
-       
+
         const rows = 3, cols = 2;
         const chartWidth = width / cols, chartHeight = height / rows;
         const h = chartHeight / 2;
-  
-        // const line = d3.line()
-        //     .x(d=>d.x*10)
-        //     .y(d=>d.y)
-        //     .curve(d3.curveMonotoneX);
 
-        // const area = d3.area()
-        //     .x(d=>d.x*10)
-        //     .y1(d=>d.y)
-        //     .y0(height/2)
-        //     .curve(d3.curveMonotoneX);
-        
         const groups = svg.selectAll('g').data(interpolateTypes)
             .enter().append('g')
             .attr('class',(d,i)=>'g'+i)
@@ -89,16 +76,15 @@
             });
 
         groups.each(function(interpolate, i){
-            let area = d3.area()
-                .x(d=>d.x*5)
-                .y1(d=>d.y)
-                .y0(h)
+            let line = d3.line()
+                .x(d=>d.day*30)
+                .y(d=>d.temp)
                 .curve(interpolate)
-                .defined(d=> !isNaN(d.x) && !isNaN(d.y));
+                .defined(d=> !isNaN(d.day) && !isNaN(d.temp));
 
             d3.select(this).append("path")
                 .datum(data)
-                .attr('d', area);
+                .attr('d', line);
         })
 
 
