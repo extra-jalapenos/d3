@@ -94,7 +94,9 @@
                 .x(d=>d.x*5)
                 .y1(d=>d.y)
                 .y0(h)
-                .curve(interpolate);
+                .curve(interpolate)
+                .defined(d => !isNaN(d.x) && !isNaN(d.y));
+
             d3.select(this).append("path")
                 .datum(data)
                 .attr('d', area);
