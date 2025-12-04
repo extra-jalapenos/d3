@@ -9,7 +9,7 @@
             height: 100%;
             margin: 0;
         }
- 
+
         ellipse {
             fill: blue;
         }
@@ -41,7 +41,7 @@
         { day: 0, temp: 12 },
         { day: 1, temp: 17 },
         { day: 2, temp: 15 },
-        { day: 3, temp: null }, // sensor failure
+        { day: 3, temp: 15 }, // sensor failure
         { day: 4, temp: 18 },
         { day: 5, temp: 20 },
         { day: 6, temp: 16 }
@@ -51,17 +51,22 @@
 
     const width = document.documentElement.clientWidth;
     const height = document.documentElement.clientHeight;
+
+    const yScale = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.temp)]) // input
+        .range([height, 0]) // output
+
     const svg = d3.select("body").append("svg")
     .attr("height", "100%")
     .attr("width", "100%");
-         
+
     const line = d3.line()
         .x(d=>d.day*40)
-        .y(d=>d.temp*5)
+        .y(d=> yScale(d.temp))
         .defined(d=>!isNaN(d.temp));
 
     const group = svg.append("g").attr('transform',`translate(${margin.left},${margin.top})`);
-    
+
     group.append('path')
         .datum(data)
         .attr('d',line);
