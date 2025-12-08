@@ -9,7 +9,7 @@
             height: 100%;
             margin: 0;
         }
- 
+
         ellipse {
             fill: blue;
         }
@@ -51,13 +51,62 @@
     const margin = { 'left':50,'top':50,'right':50,'bottom':50 }
     const width = document.documentElement.clientWidth - margin.left - margin.right;
     const height = document.documentElement.clientHeight - margin.top - margin.bottom;
-    
+
     const svg = d3.select("body").append("svg").attr("height", "100%").attr("width", "100%");
     const chartGroup = svg.append('g').attr('class','chartGroup').attr('transform',`translate(${margin.left},${margin.top})`);
 
-       
- 
-    
+    const data = [
+        { day: "Mon", desktop: 100, mobile: 80, tablet: 30 },
+        { day: "Tue", desktop: 120, mobile: 90, tablet: 40 },
+        { day: "Wed", desktop: 90, mobile: 70, tablet: 20 },
+        { day: "Thu", desktop: 110, mobile: 100, tablet: 50 },
+        { day: "Fri", desktop: 95, mobile: 85, tablet: 35 }
+        ];
+
+    const stack = d3.stack()
+        .keys(["mobile", "desktop", "tablet"]);
+
+    const stackedData = stack(data)
+
+    const xScale = d3.scaleBand()
+        .domain(data.map(d=>d.day))
+        .range([0, width])
+
+    const yMax = stackedData[stackedData.length - 1]
+
+    const yScale = d3.scaleLinear()
+        .domain([0, d3.max(yMax, d=>d[1])])
+        .range([height, 0])
+        .nice();
+
+    chartGroup.append("g")
+        .attr("class", "x axis")
+        .attr("transform", `translate(0, ${height})`)
+        .call(d3.axisBottom(xScale))
+
+    chartGroup.append("g")
+        .attr("class", "y axis")
+        .call(d3.axisLeft(yScale))
+
+    const colors = ["steelblue", "turquoise", "cadetblue"]
+    const layersGroup = chartGroup.selectAll("g.bar")
+        .data(stackedData)
+        .enter()
+        .append("g")
+        .attr("class", "bar")
+        .attr("fill", (d, i) => colors[i])
+    console.log(layersGroup)
+
+    const layerPoints = layersGroup.selectAll("rect")
+        .data(d => d)
+        .enter()
+        .append("rect")
+        .attr("x", d => xScale(d.data.day))
+        .attr("y", d => yScale(d[1]))
+        .attr("width", xScale.bandwidth())
+        .attr("height", d=> yScale(d[0])- yScale(d[1]))
+
+    console.log(layerPoints)
 
     </script>
 
