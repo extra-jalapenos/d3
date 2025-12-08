@@ -9,7 +9,7 @@
             height: 100%;
             margin: 0;
         }
- 
+
         ellipse {
             fill: blue;
         }
@@ -17,14 +17,14 @@
             fill: pink;
         }
         text {
-            fill:white;
+            fill:black;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 32px;
+            font-size: 1rem;
         }
 
         line, path {
-            stroke: green;
-            stroke-width: 5px;
+            stroke: black;
+            stroke-width: 1px;
             fill: none;
         }
 
@@ -41,20 +41,20 @@
         { day: 0, temp: 12 },
         { day: 1, temp: 17 },
         { day: 2, temp: 15 },
-        { day: 3, temp: 15 }, 
+        { day: 3, temp: 15 },
         { day: 4, temp: 18 },
         { day: 5, temp: 20 },
         { day: 6, temp: 16 }
         ];
 
-    const margin = { 'left':50,'top':100,'right':0,'bottom':0 }
+    const margin = { 'left':50,'top':100,'right':0,'bottom': 50 }
 
     const width = document.documentElement.clientWidth;
     const height = document.documentElement.clientHeight;
-    
+
     const yScale = d3.scaleLinear()
         .domain([0,d3.max(data, d => d.temp)])//input
-        .range([height, 0]);//output
+        .range([height - margin.top - margin.bottom, 0]);//output
 
 console.log('height -->', height);
 console.log('yScale0',yScale(0));
@@ -63,14 +63,21 @@ console.log('yScaleMax',yScale(d3.max(data, d=>d.temp)));
     const svg = d3.select("body").append("svg")
     .attr("height", "100%")
     .attr("width", "100%");
-         
+
+    const graphGroup = svg
+                        .append("g")
+                        .attr("transform", `translate(${margin.left}, ${margin.top})`)
+
+    graphGroup.attr("class", "axis y")
+        .call(d3.axisRight(yScale))
+
     const line = d3.line()
         .x(d=>d.day*40)
         .y(d=>yScale(d.temp))
         .defined(d=>!isNaN(d.temp));
 
     const group = svg.append("g").attr('transform',`translate(${margin.left},${margin.top})`);
-    
+
     group.append('path')
         .datum(data)
         .attr('d',line);

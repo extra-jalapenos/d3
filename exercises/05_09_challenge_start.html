@@ -43,6 +43,10 @@
     const chartGroupCelsius = svg.append("g")
       .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
+    // create group
+    const chartGroupFahrenheit = svg.append("g")
+      .attr("transform", `translate(${width + margin.left}, ${margin.top})`)
+
     // Temperature value in Celsius
     const currentTempC = 36;
 
@@ -51,12 +55,26 @@
       .domain([0, 100])
       .range([height, 0]);
 
+    // fahrenheit-Scale
+    const yScaleF = d3.scaleLinear()
+      .domain([(0 * 9/5)+32, (100 * 9/5)+32 ])
+      .range([height, 0])
+
     // Add left axis (Celsius)
     chartGroupCelsius.append("g")
       .attr("class", "axis")
       .call(d3.axisLeft(yScaleC).ticks(10).tickFormat(d => d + "°C"));
 
     chartGroupCelsius.append("text").text('Celsius').attr('text-anchor','middle').attr('transform','translate(0,-20)');
+
+    // append right axis (Fahrenheit)
+    chartGroupFahrenheit.append("g")
+      .attr("class", "axis")
+      .call(d3.axisRight(yScaleF).tickFormat(d => d + "°F"))
+
+    chartGroupFahrenheit.append("text").text("Fahrenheit")
+      .attr("text-anchor", "middle")
+      .attr("transform", `translate(0, -20)`)
 
     // Draw thermometer outline
     chartGroupCelsius.append("rect")
