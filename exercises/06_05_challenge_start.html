@@ -9,7 +9,7 @@
             height: 100%;
             margin: 0;
         }
- 
+
         ellipse {
             fill: blue;
         }
@@ -49,15 +49,44 @@
     const margin = { 'left':100,'top':100,'right':50,'bottom':50 }
     const width = document.documentElement.clientWidth - margin.left - margin.right;
     const height = document.documentElement.clientHeight - margin.top - margin.bottom;
-    
+
     const svg = d3.select("body").append("svg").attr("height", "100%").attr("width", "100%");
     const chartGroup = svg.append('g').attr('class','chartGroup').attr('transform',`translate(${margin.left},${margin.top})`);
 
+    const data = d3.csv("https://raw.githubusercontent.com/LinkedInLearning-VizData/d3/refs/heads/main/flatData.csv")
+        .then((rawArray) => {
+            const parsedData = rawArray.map(el => {
+                return {
+                    ...el,
+                    Date: new Date(el.Date),
+                    Value: +el.Value
+                }
+            })
 
- 
-        
- 
-    
+            const xScale = d3.scaleTime(
+                [d3.min(parsedData, d => d.Date), d3.max(parsedData, d => d.Date)],
+                [0, width]
+            ).nice()
+
+            const yScale = d3.scaleLinear(
+                [d3.min(parsedData, d => d.Value), d3.max(parsedData, d => d.Value)],
+                [height, 0]
+            ).nice()
+
+            chartGroup.append("g").attr("class", "x axis").attr("transform", `translate(0, ${height})`).call(d3.axisBottom(xScale).ticks(4))
+            chartGroup.append("g").attr("class", "y axis").call(d3.axisLeft(yScale))
+
+            const line = d3.line()
+                .x(d => xScale(d.Date))
+                .y(d => yScale(d.Value))
+                .curve(d3.curveMonotoneX)
+
+            chartGroup
+                .append("path")
+                .attr("class", "lineChart")
+                .datum(parsedData)
+                .attr("d", line)
+            })
 
     </script>
 
