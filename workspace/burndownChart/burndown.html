@@ -12,18 +12,67 @@
 		}
 
 		body {
-			background-color: #232323;
+			background-color: #ebebeb;
 		}
+
 	</style>
 </head>
 <body>
 	<script type="module">
 
-	const height = document.documentElement.clientHeight
-	const width = document.documentElement.clientWidth
-	const svg = d3.select("body").append("svg")
-		.attr("viewBox", [0, 0, width, height])
+	const height = 500
+	const width = 1000
+	const svg = d3.select("body")
+		.append("svg")
+		.attr("width", "100%")
+		.attr("height", "100%")
+		.attr("viewBox", `0, 0, ${width}, ${height}`)
 		.attr("preserveAspectRatio", "none")
+
+	const rawData = await d3.tsv("./burndownData.csv")
+
+	const dimTable = d3.group(rawData.map(audit => {
+		const facts = { ... audit }
+		delete facts.workstep
+		delete facts.doneAt
+		delete facts.doneBy
+		delete facts.furtherSpecification
+		delete facts.duration
+		return facts
+	}), d => d.auditId)
+
+	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
+	const canvas = svg
+		.append("g")
+		.attr("class", "canvas")
+		.attr("fill", "yellow")
+		.attr("transform", `translate(${margin.left}, ${margin.top})`)
+
+	const axes = svg.append("g").attr("class", "axes")
+
+	const xScale = d3.scaleTime()
+		.domain(d3.extent(rawData, d => new Date(d.doneAt)))
+		.range([0, width - margin.left - margin.right])
+		
+	const groupByAuditId = d3.groups(rawData, d => d.auditId)
+
+	const yScale = d3.scaleLinear()
+		.domain([0, groupByAuditId.length])
+		.range([height - margin.bottom, 0])
+
+	yScale
+
+	axes
+		.append("g")
+		.attr("class", "x axis")
+		.attr("transform", `translate(${margin.left}, ${height - margin.bottom})`)
+		.call(d3.axisBottom(xScale))
+
+	axes
+		.append("g")
+		.attr("class", "y axis")
+		.attr("transform", `translate(${margin.left}, ${margin.top})`)
+		.call(d3.axisLeft(yScale))
 
 	</script>
 </body>
