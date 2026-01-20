@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Einführung von SVG</title>
+	<style>
+		svg {
+			border: 1px solid black;
+		}
+
+		.chartGroup {
+			border: 1px red solid;
+		}
+
+		.axis, path, .tick {
+			stroke: black;
+		}
+
+	</style>
+	<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+
+<body>
+	<script>
+		const margin = { top: 10, bottom: 10, left: 10, right: 10 }
+		const width = document.documentElement.clientWidth  - margin.left - margin.right
+		const height = document.documentElement.clientHeight - margin.top - margin.bottom
+		const body = d3.select("body")
+
+		const e3dcData = d3.json("./e3dc/feed_data.json").then((data) => {
+			console.log(data)
+			const dateRange = d3.extent(data.time, datapoint => new Date(datapoint))
+			// const yearRange = d3.extent(dateRange, d => d.getFullYear())
+			const yearRange = [2019, new Date().getFullYear()]
+			// iterable: how many yearCharts do we need to render?
+			const years = Array(yearRange[1]-yearRange[0]+1).fill(yearRange[0]).map((yr, i) => yr + i)
+
+			const scaleForWeekday = d3.scaleOrdinal()
+				.domain([0, 1, 2, 3, 4, 5, 6])
+				.range([7, 1, 2, 3, 4, 5, 6])
+
+			const zippedData = d3.zip(data.time, data.ASOC, data.NetOut)
+				.map(d => {
+					const date = new Date(d[0])
+					d[0] = date
+					d.push(scaleForWeekday(date.getDay()))
+					return d
+				})
+			// group by full year
+			// console.log(groupConfig)
+
+			// how high is one of those?
+			const h = height / years.length
+
+			// get a parent svg
+			const svg = body.append("svg")
+				.attr("width", width)
+				.attr("height", height)
+
+			// const yearChartGroups = svg.selectAll("g")
+			// 	.data(years)
+			// 	.enter()
+			// 	.append("g")
+			// 	.attr("width", width)
+			// 	.attr("height", h)
+			// 	.attr("class",  d => "chartGroup year")
+			// 	.attr("transform", (yr, i) => `translate(0, ${h*i})`)
+
+			const rectangleHeight = 20
+
+			const colorScale = d3.scaleSequential([0, 100],
+				d3.interpolatePiYG
+			);
+
+
+			console.log(colorScale(100))
+			console.log(zippedData)
+			const rects = svg.selectAll("rect")
+				.data(zippedData)
+				.enter()
+				.append("rect")
+				.attr("fill", (d) => colorScale(Math.round(d[1])))
+				.attr("x", (d,i) => d[0].getHours()*6)
+				.attr("y", (d, i) => i / 24)
+				.attr("width", 5)
+				.attr("height", 5)
+
+			// const xScale = d3.scaleBand().domain(dateRange).range([0, width])
+			// const yScale = d3.scaleLinear().domain([0, 200]).range([height, 0])
+
+			// chartGroup.append("g").attr("class", "x axis").call(d3.axisLeft(yScale))
+			// chartGroup.append("g").attr("class", "y axis").call(d3.axisBottom(xScale)).attr("transform", `translate(0, ${height - margin.bottom * 2})`)
+		})
+	</script>
+</body>
+</html>
