@@ -41,6 +41,19 @@
 		return facts
 	}), d => d.auditId)
 
+	const worklog = d3.group(rawData.map(audit => {
+		return {
+			id: audit.auditId,
+			workstep: audit.workstep,
+			doneAt: audit.doneAt,
+			doneBy: audit.doneBy,
+			furtherSpecification: audit.furtherSpecification,
+			duration: audit.duration
+		}
+	}), d => d.id)
+
+	console.log(worklog)
+
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
@@ -53,7 +66,7 @@
 	const xScale = d3.scaleTime()
 		.domain(d3.extent(rawData, d => new Date(d.doneAt)))
 		.range([0, width - margin.left - margin.right])
-		
+
 	const groupByAuditId = d3.groups(rawData, d => d.auditId)
 
 	const yScale = d3.scaleLinear()
