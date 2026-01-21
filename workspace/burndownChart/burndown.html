@@ -29,6 +29,8 @@
 		.attr("viewBox", `0, 0, ${width}, ${height}`)
 		.attr("preserveAspectRatio", "none")
 
+	const statusMap = await d3.tsv("./steps.tsv")
+	const statusLookup = d3.index(statusMap, d => d.label)
 	const rawData = await d3.tsv("./burndownData.csv")
 
 	const dimTable = d3.group(rawData.map(audit => {
@@ -41,10 +43,10 @@
 		return facts
 	}), d => d.auditId)
 
-	const worklog = d3.group(rawData.map(audit => {
+	const worklog = d3.groups(rawData.map(audit => {
 		return {
 			id: audit.auditId,
-			workstep: audit.workstep,
+			workstep: statusLookup.get(audit.workstep),
 			doneAt: audit.doneAt,
 			doneBy: audit.doneBy,
 			furtherSpecification: audit.furtherSpecification,
@@ -53,6 +55,26 @@
 	}), d => d.id)
 
 	console.log(worklog)
+
+	const progressionData = worklog.map(logPerID => {
+		const [id, logs] = logPerID
+		const processLogs = (logs) => {
+			let currentStatus = 0
+			const returnArray = logs.map(log => {
+				const returnObj = [
+					{ id, date: log.doneAt, statusId: currentStatus, value: -1 },
+					{ id, date: log.doneAt, statusId: Number(log.workstep.ID), value: 1 }
+				 ]
+				 currentStatus = Number(log.workstep.ID)
+				return returnObj
+			})
+			return returnArray.flat()
+		}
+
+		return processLogs(logs)
+	})
+
+	console.log(progressionData)
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
