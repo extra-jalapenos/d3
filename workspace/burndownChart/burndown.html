@@ -30,7 +30,7 @@
 		.attr("preserveAspectRatio", "none")
 
 	const statusMap = await d3.tsv("./steps.tsv")
-	const statusLookup = d3.index(statusMap, d => d.label)
+	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./burndownData.csv")
 
 	const dimTable = d3.group(rawData.map(audit => {
@@ -43,38 +43,61 @@
 		return facts
 	}), d => d.auditId)
 
+	const minDate = d3.min(rawData, d => new Date(d.doneAt))
+
 	const worklog = d3.groups(rawData.map(audit => {
+		const [day, month, year] = audit.doneAt.split(".")
 		return {
 			id: audit.auditId,
 			workstep: statusLookup.get(audit.workstep),
-			doneAt: audit.doneAt,
+			doneAt: audit.doneAt ? new Date(Number(year), Number(month) - 1, Number(day)) : minDate,
 			doneBy: audit.doneBy,
 			furtherSpecification: audit.furtherSpecification,
 			duration: audit.duration
 		}
 	}), d => d.id)
 
-	console.log(worklog)
-
 	const progressionData = worklog.map(logPerID => {
 		const [id, logs] = logPerID
 		const processLogs = (logs) => {
-			let currentStatus = 0
+			let currentStatus = statusLookup.get("Beginn")
 			const returnArray = logs.map(log => {
+				const isNewStatusHigher = log.workstep.stageId >= currentStatus.stageId
+				if (isNewStatusHigher === false) return undefined
 				const returnObj = [
-					{ id, date: log.doneAt, statusId: currentStatus, value: -1 },
-					{ id, date: log.doneAt, statusId: Number(log.workstep.ID), value: 1 }
+					{ id, date: log.doneAt, status: currentStatus, value: -1 },
+					{ id, date: log.doneAt, status: log.workstep, value: 1 }
 				 ]
-				 currentStatus = Number(log.workstep.ID)
+				 currentStatus = log.workstep
 				return returnObj
 			})
-			return returnArray.flat()
-		}
 
+			return returnArray.flat().filter(item => item !== undefined)
+		}
 		return processLogs(logs)
 	})
 
-	console.log(progressionData)
+	const groupedByStatusId = d3.groups(progressionData.flat(), d => Number(d.status.id), d => d.date)
+			.toSorted((a, b) => a[0] - b[0])
+			.map(d => {
+				d[1].map(d => {
+					d[1] = d3.sum(d[1].map(d => d.value))
+					return d
+				})
+				d[1].sort((a, b) => a[0] - b[0])
+			return d
+			})
+
+	const orderedGroups = groupedByStatusId.map(pair => {
+		pair[1].toSorted((a, b) => a.date - b.date)
+		let init = 0
+		pair[1].map(d => {
+			d[1] += init
+			init = d[1]
+			return d
+		})
+		return pair
+	})
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
@@ -109,6 +132,18 @@
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 		.call(d3.axisLeft(yScale))
 
+	const colorScale = d3.scaleSequential(d3.interpolateCool).domain([0,14])
+	const areaGenerator = d3.area(d => xScale(d[0]), yScale(0), d => yScale(d[1]))
+
+	const plots = canvas.selectAll("path").data(orderedGroups)
+			.enter()
+			.append("path")
+			.attr("class", "plot")
+			.attr("id", (d) => d[0])
+			// .attr("fill", "none")
+			.attr("opacity", 0.9)
+			.attr("stroke", (d, i) => colorScale(i))
+			.attr("d", d => areaGenerator(d[1]))
 	</script>
 </body>
 </html>
