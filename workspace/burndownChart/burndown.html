@@ -110,7 +110,7 @@
 		return accumulated
 	})
 
-	const flatten = d3.groups(orderedGroups.flat(), d => d.date)
+	const flatten = orderedGroups.flat()
 	console.log(flatten)
 	const stackFunction = d3.stack()
 		.keys(flatten, d => d.statusId)
