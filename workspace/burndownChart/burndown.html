@@ -33,6 +33,8 @@
 	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./burndownData.csv")
 
+	const refYear = d3.mode(rawData, d => d.referenceYear)
+
 	const dimTable = d3.group(rawData.map(audit => {
 		const facts = { ... audit }
 		delete facts.workstep
@@ -45,12 +47,14 @@
 
 	const minDate = d3.min(rawData, d => new Date(d.doneAt))
 
-	const worklog = d3.groups(rawData.map(audit => {
+	const worklog = d3.groups(rawData.filter(audit => audit.doneAt).map(audit => {
 		const [day, month, year] = audit.doneAt.split(".")
+		const workstep = statusLookup.get(audit.workstep)
+		if (workstep === undefined) throw Error("undefined workstep " + audit.workstep)
 		return {
 			id: audit.auditId,
-			workstep: statusLookup.get(audit.workstep),
-			doneAt: audit.doneAt ? new Date(Number(year), Number(month) - 1, Number(day)) : minDate,
+			workstep,
+			doneAt: new Date(Number(year), Number(month) - 1, Number(day)),
 			doneBy: audit.doneBy,
 			furtherSpecification: audit.furtherSpecification,
 			duration: audit.duration
@@ -59,11 +63,13 @@
 
 	const progressionData = worklog.map(logPerID => {
 		const [id, logs] = logPerID
+		// if it's only Beginn return blank array, we'll add the +1 Beginn status later
+
 		const processLogs = (logs) => {
+			if (logs.length === 1) return []
 			let currentStatus = statusLookup.get("Beginn")
 			const returnArray = logs.map(log => {
-				const isNewStatusHigher = log.workstep.stageId >= currentStatus.stageId
-				if (isNewStatusHigher === false) return undefined
+				// const isNewStatusHigher = log.workstep.stageId >= currentStatus.stageId
 				const returnObj = [
 					{ id, date: log.doneAt, status: currentStatus, value: -1 },
 					{ id, date: log.doneAt, status: log.workstep, value: 1 }
@@ -72,9 +78,12 @@
 				return returnObj
 			})
 
-			return returnArray.flat().filter(item => item !== undefined)
+			const flattened = returnArray.flat()
+			return flattened
 		}
-		return processLogs(logs)
+
+		const processedLogs = processLogs(logs)
+		return [...processedLogs, { id, date: minDate, status: statusLookup.get("Beginn"), value: 1 }]
 	})
 
 	const groupedByStatusId = d3.groups(progressionData.flat(), d => Number(d.status.id), d => d.date)
@@ -89,15 +98,25 @@
 			})
 
 	const orderedGroups = groupedByStatusId.map(pair => {
-		pair[1].toSorted((a, b) => a.date - b.date)
-		let init = 0
-		pair[1].map(d => {
-			d[1] += init
-			init = d[1]
-			return d
+		const [statusId, valueProgression] = pair
+		valueProgression.toSorted((a, b) => a.date - b.date)
+		let cumsum = 0
+		const accumulated = valueProgression.map(d => {
+			const [date, value] = d
+			const returnObj = { date, value, statusId, cumsum}
+			cumsum += value
+			return returnObj
 		})
-		return pair
+		return accumulated
 	})
+
+	const flatten = d3.groups(orderedGroups.flat(), d => d.date)
+	console.log(flatten)
+	const stackFunction = d3.stack()
+		.keys(flatten, d => d.statusId)
+		.value(([, group], key) => group.get(key).cumsum)
+
+	stackFunction(flatten)
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
@@ -110,8 +129,6 @@
 	const xScale = d3.scaleTime()
 		.domain(d3.extent(rawData, d => new Date(d.doneAt)))
 		.range([0, width - margin.left - margin.right])
-
-	const groupByAuditId = d3.groups(rawData, d => d.auditId)
 
 	const yScale = d3.scaleLinear()
 		.domain([0, groupByAuditId.length])
@@ -138,8 +155,8 @@
 			.append("path")
 			.attr("class", "plot")
 			.attr("id", (d) => d[0])
-			// .attr("fill", "none")
-			.attr("opacity", 0.9)
+			.attr("fill", (d, i) => colorScale(i))
+			.attr("opacity", 0.2)
 			.attr("stroke", (d, i) => colorScale(i))
 			.attr("d", d => areaGenerator(d[1]))
 	</script>
