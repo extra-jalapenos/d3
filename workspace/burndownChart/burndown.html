@@ -31,7 +31,7 @@
 
 	const statusMap = await d3.tsv("./steps.tsv")
 	const statusLookup = d3.index(statusMap, d => d.stepName)
-	const rawData = await d3.tsv("./burndownData.csv")
+	const rawData = await d3.tsv("./mvpData.csv")
 
 	const refYear = d3.mode(rawData, d => d.referenceYear)
 
@@ -110,35 +110,41 @@
 		return accumulated
 	})
 
-	const flatten = orderedGroups.flat()
-	console.log(flatten)
-	const stackFunction = d3.stack()
-		.keys(flatten, d => d.statusId)
-		.value(([, group], key) => group.get(key).cumsum)
 
-	stackFunction(flatten)
+	const flatten = d3.index(orderedGroups.flat(), d => d.date, d => d.statusId)
+	console.log(flatten)
+
+	const statusIdKeys = d3.union(orderedGroups.flat().map(d => d.date))
+	const stacked = d3.stack()
+			.keys(statusIdKeys)
+			.value(([_, group], statusIdkey) => group.get(statusIdkey).cumsum)
+			(d3.index(orderedGroups.flat(), d => d.date, d => d.statusId));
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
 		.attr("class", "canvas")
+		.attr("width", width - margin.left - margin.right)
+		.attr("height", height - margin.top - margin.bottom)
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 
 	const axes = svg.append("g").attr("class", "axes")
-
+	console.log(refYear)
 	const xScale = d3.scaleTime()
-		.domain(d3.extent(rawData, d => new Date(d.doneAt)))
+		.domain([new Date(Number(refYear), 0, 1), new Date(Number(refYear) + 1, 5, 30)])
 		.range([0, width - margin.left - margin.right])
 
+	xScale.clamp(true)
+
 	const yScale = d3.scaleLinear()
-		.domain([0, groupByAuditId.length])
+		.domain([0, dimTable.size])
 		.range([height - margin.bottom, 0])
 
 
 	axes
 		.append("g")
 		.attr("class", "x axis")
-		.attr("transform", `translate(${margin.left}, ${height - margin.bottom})`)
+		.attr("transform", `translate(${margin.left}, ${margin.top + height - margin.bottom})`)
 		.call(d3.axisBottom(xScale))
 
 	axes
@@ -148,9 +154,9 @@
 		.call(d3.axisLeft(yScale))
 
 	const colorScale = d3.scaleSequential(d3.interpolateCool).domain([0,14])
-	const areaGenerator = d3.area(d => xScale(d[0]), yScale(0), d => yScale(d[1]))
+	const areaGenerator = d3.area(d => xScale(d.date), yScale(0), d => yScale(d.cumsum))
 
-	const plots = canvas.selectAll("path").data(orderedGroups)
+	const plots = canvas.selectAll("path").data(flatten)
 			.enter()
 			.append("path")
 			.attr("class", "plot")
