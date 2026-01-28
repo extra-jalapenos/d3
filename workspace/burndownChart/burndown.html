@@ -54,16 +54,14 @@
 		}
 	}), d => d.id)
 
-	console.log(worklog)
-
 	const progressionData = worklog.map(logPerID => {
 		const [id, logs] = logPerID
 		const processLogs = (logs) => {
 			let currentStatus = 0
 			const returnArray = logs.map(log => {
 				const returnObj = [
-					{ id, date: log.doneAt, statusId: currentStatus, value: -1 },
-					{ id, date: log.doneAt, statusId: Number(log.workstep.ID), value: 1 }
+					{ id, date: new Date(log.doneAt), statusId: currentStatus, value: -1 },
+					{ id, date: new Date(log.doneAt), statusId: Number(log.workstep.ID), value: 1 }
 				 ]
 				 currentStatus = Number(log.workstep.ID)
 				return returnObj
@@ -74,13 +72,26 @@
 		return processLogs(logs)
 	})
 
-	console.log(progressionData)
+	const sortByDate = progressionData.flat().toSorted((d1, d2) => d1.date - d2.date)
+	// sum up differences by date and statusId:
 
+	const groupByStatusID = d3.rollups(sortByDate,
+		D => d3.sum(D.map(d => d.value)),
+		d => d.statusId,
+		d => d.date)
+
+	// order each array group by date and then cumulative sum, baby
+	const cumulatedSum = groupByStatusID.map(D => {
+		D[1].sort((a, b) => new Date(a[0]) - new Date(b[0]))
+		D[2] = d3.cumsum(D[1], d => d[1])
+		return D
+	})
+
+	console.log(groupByStatusID)
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
 		.attr("class", "canvas")
-		.attr("fill", "yellow")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 
 	const axes = svg.append("g").attr("class", "axes")
@@ -95,7 +106,6 @@
 		.domain([0, groupByAuditId.length])
 		.range([height - margin.bottom, 0])
 
-	yScale
 
 	axes
 		.append("g")
@@ -108,6 +118,14 @@
 		.attr("class", "y axis")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 		.call(d3.axisLeft(yScale))
+
+	const plots = canvas
+		.selectAll("g.plot")
+		.data(groupByStatusID)
+		.enter()
+		.append("g")
+		.attr("class", "plot")
+		.attr("statusId", d => d[0])
 
 	</script>
 </body>
