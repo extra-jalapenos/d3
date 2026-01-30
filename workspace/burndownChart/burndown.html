@@ -32,6 +32,13 @@
 	const statusMap = await d3.tsv("./steps.tsv")
 	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./burndownData.csv")
+	const distinctDates = d3.union(rawData.map(d => new Date(d.doneAt)))
+	const distinctStatus = statusMap.map(status => String(status.id))
+	const fillerDates = distinctDates.keys().map(date => {
+		return distinctStatus.map(status => {
+			return { date, status: { id: status }, value: 0 }
+		})
+	})
 
 	const refYear = Number(d3.mode(rawData, d => d.referenceYear))
 
@@ -61,6 +68,7 @@
 		}
 	}), d => d.id)
 
+
 	const progressionData = worklog.map(logPerID => {
 		const [id, logs] = logPerID
 		// if it's only Beginn return blank array, we'll add the +1 Beginn status later
@@ -69,7 +77,6 @@
 			if (logs.length === 1) return []
 			let currentStatus = statusLookup.get("Beginn")
 			const returnArray = logs.map(log => {
-				// const isNewStatusHigher = log.workstep.stageId >= currentStatus.stageId
 				const returnObj = [
 					{ id, date: log.doneAt, status: currentStatus, value: -1 },
 					{ id, date: log.doneAt, status: log.workstep, value: 1 }
@@ -83,52 +90,16 @@
 		}
 
 		const processedLogs = processLogs(logs)
-		return [...processedLogs, { id, date: minDate, status: statusLookup.get("Beginn"), value: 1 }]
+		return [...processedLogs,
+			{ id, date: minDate, status: statusLookup.get("Beginn"), value: 1 }]
 	})
 
-	const groupedByStatusId = d3.groups(progressionData.flat(), d => Number(d.status.id), d => d.date)
-			.toSorted((a, b) => a[0] - b[0])
-			.map(d => {
-				d[1].map(d => {
-					d[1] = d3.sum(d[1].map(d => d.value))
-					return d
-				})
-				d[1].sort((a, b) => a[0] - b[0])
-			return d
-			})
+	const valueChange = d3.rollup([
+		...progressionData.flat(),
+		...Array.from(fillerDates).flat(),
+	], D => d3.sum(D.map(d=>d.value)), d => d.date, d => d.status.id)
 
-	const orderedGroups = groupedByStatusId.map(pair => {
-		const [statusId, valueProgression] = pair
-		valueProgression.toSorted((a, b) => a.date - b.date)
-		let cumsum = 0
-		const accumulated = valueProgression.map(d => {
-			const [date, value] = d
-			const returnObj = { date, value, statusId, cumsum}
-			cumsum += value
-			return returnObj
-		})
-		return accumulated
-	})
-
-	const flatten = orderedGroups.flat()
-
-	const byDateAndStatusId = d3.index(flatten, d => d.date, d => d.statusId)
-	
-	byDateAndStatusId.keys().forEach(distinctDate => {
-		const logs = byDateAndStatusId.get(distinctDate)
-		let count = 0
-		const statusIds = distinctKeys.forEach(statusId => {
-			const dateAndStatusCombination = logs.get(statusId)
-			if (dateAndStatusCombination === undefined) throw Error(dateAndStatusCombination)
-			dateAndStatusCombination["stackStart"] = count
-			dateAndStatusCombination["stackEnd"] = dateAndStatusCombination.cumsum + count
-			count = count + dateAndStatusCombination.cumsum
-			return dateAndStatusCombination
-		})
-	})
-
-	const byStatusId = d3.group(flatten, d => d.statusId)
-
+	console.log(progressionData.flat()[0])
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
@@ -151,7 +122,7 @@
 	axes
 		.append("g")
 		.attr("class", "x axis")
-		.attr("transform", `translate(${margin.left}, ${height - margin.bottom})`)
+		.attr("transform", `translate(${margin.left}, ${height + margin.top - margin.bottom})`)
 		.call(d3.axisBottom(xScale))
 
 	axes
@@ -170,10 +141,11 @@
 	])
 
 	const areaGenerator = d3.area(d => xScale(d.date),
-		d => yScale(d.stackStart),
-		d => yScale(d.stackEnd)).curve(d3.curveLinear)
+		d => yScale(0),
+		d => yScale(d.value)).curve(d3.curveStep)
+		.defined(d => d.date)
 
-	const plots = canvas.selectAll("path").data(byStatusId)
+	const plots = canvas.selectAll("path").data()
 			.enter()
 			.append("path")
 			.attr("class", "plot")
