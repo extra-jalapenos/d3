@@ -76,6 +76,8 @@
 	const valueChangePerStatusId = d3.group(progressionData, d => Number(d.status.id))
 
 	// now we make a fucking map over the time range
+	const flatProgressionArray = []
+
 	const statusIdIterator = valueChangePerStatusId.keys()
 	for (const statusId of statusIdIterator) {
 		const entriesInStatus = valueChangePerStatusId.get(statusId)
@@ -86,13 +88,15 @@
 			.map(D => {
 				const change = d3.sum(D[1].map(d => d.value))
 				valueProgression += change
+				flatProgressionArray.push({ date: D[0], statusId, value: change, valueProgression })
 				return { date: D[0], value: change, valueProgression }
 			})
 
 		valueChangePerStatusId.set(statusId, valueChangePerDay)
 	}
 
-	console.log(Array.from(valueChangePerStatusId).sort((a, b) => a[0] - b[0]))
+	const distinctDates = d3.union(flatProgressionArray.map(d => d.date))
+	// go through all dates and if there's no value for an ID set its value to 0
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
