@@ -32,74 +32,68 @@
 	const statusMap = await d3.tsv("./steps.tsv")
 	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./burndownData.csv")
-	const distinctDates = d3.union(rawData.map(d => new Date(d.doneAt)))
+	const worklogsByDateAsc = rawData.map(d => {
+		const [day, month, year] = d.doneAt.split(".").map(digit => Number(digit))
+		return { auditId: d.auditId, workstep: statusLookup.get(d.workstep), date: new Date(year, month-1, day), dateStr: String(new Date(year, month-1, day))}
+	}).filter(d => String(new Date(d.dateStr)) !== "Invalid Date")
+	.sort((a, b) => a.date < b.date)
+
+
+	// calculate the
 	const distinctStatus = statusMap.map(status => String(status.id))
-	const fillerDates = distinctDates.keys().map(date => {
-		return distinctStatus.map(status => {
-			return { date, status: { id: status }, value: 0 }
-		})
-	})
 
 	const refYear = Number(d3.mode(rawData, d => d.referenceYear))
-
-	const dimTable = d3.group(rawData.map(audit => {
-		const facts = { ... audit }
-		delete facts.workstep
-		delete facts.doneAt
-		delete facts.doneBy
-		delete facts.furtherSpecification
-		delete facts.duration
-		return facts
-	}), d => d.auditId)
-
 	const minDate = d3.min(rawData, d => new Date(d.doneAt))
 
-	const worklog = d3.groups(rawData.filter(audit => audit.doneAt).map(audit => {
-		const [day, month, year] = audit.doneAt.split(".")
-		const workstep = statusLookup.get(audit.workstep)
-		if (workstep === undefined) throw Error("undefined workstep " + audit.workstep)
-		return {
-			id: audit.auditId,
-			workstep,
-			doneAt: new Date(Number(year), Number(month) - 1, Number(day)),
-			doneBy: audit.doneBy,
-			furtherSpecification: audit.furtherSpecification,
-			duration: audit.duration
-		}
-	}), d => d.id)
+	// to calculate the progression, we'll need to group by audit
+	const sortedWorklogsByAuditId = d3.groups(worklogsByDateAsc, d => d.auditId)
+	const progressionData = sortedWorklogsByAuditId.map(auditIdGroup => {
+		const [auditId, auditWorklogs] = auditIdGroup
 
-
-	const progressionData = worklog.map(logPerID => {
-		const [id, logs] = logPerID
-		// if it's only Beginn return blank array, we'll add the +1 Beginn status later
-
-		const processLogs = (logs) => {
-			if (logs.length === 1) return []
+		const processLogs = () => {
+			// if it's only Beginn return blank array, we'll add the +1 Beginn status later
+			if (auditWorklogs.length <= 1) return []
 			let currentStatus = statusLookup.get("Beginn")
-			const returnArray = logs.map(log => {
-				const returnObj = [
-					{ id, date: log.doneAt, status: currentStatus, value: -1 },
-					{ id, date: log.doneAt, status: log.workstep, value: 1 }
+			const statusProgressionLog = auditWorklogs.map(auditWorklog => {
+				const returnTuple = [
+					{ auditId, date: auditWorklog.date, status: currentStatus, value: -1 },
+					{ auditId, date: auditWorklog.date, status: auditWorklog.workstep, value: 1 }
 				 ]
-				 currentStatus = log.workstep
-				return returnObj
+				 currentStatus = auditWorklog.workstep
+				return returnTuple
 			})
 
-			const flattened = returnArray.flat()
-			return flattened
+			return statusProgressionLog.flat()
 		}
 
-		const processedLogs = processLogs(logs)
-		return [...processedLogs,
-			{ id, date: minDate, status: statusLookup.get("Beginn"), value: 1 }]
-	})
+		const processedLogs = processLogs()
+		return [{ auditId: auditId, date: minDate, status: statusLookup.get("Beginn"), value: 1 }, ...processedLogs]
+	}).flat()
 
-	const valueChange = d3.rollup([
-		...progressionData.flat(),
-		...Array.from(fillerDates).flat(),
-	], D => d3.sum(D.map(d=>d.value)), d => d.date, d => d.status.id)
+	// add a running value to each statusId
 
-	console.log(progressionData.flat()[0])
+	// first, sum per statusID
+	const valueChangePerStatusId = d3.group(progressionData, d => Number(d.status.id))
+
+	// now we make a fucking map over the time range
+	const statusIdIterator = valueChangePerStatusId.keys()
+	for (const statusId of statusIdIterator) {
+		const entriesInStatus = valueChangePerStatusId.get(statusId)
+
+		let valueProgression = 0
+		const valueChangePerDay = d3.groups(entriesInStatus, d => d.date)
+			.sort((D1, D2) => D1[0] - D2[0])
+			.map(D => {
+				const change = d3.sum(D[1].map(d => d.value))
+				valueProgression += change
+				return { date: D[0], value: change, valueProgression }
+			})
+
+		valueChangePerStatusId.set(statusId, valueChangePerDay)
+	}
+
+	console.log(Array.from(valueChangePerStatusId).sort((a, b) => a[0] - b[0]))
+
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
@@ -142,10 +136,10 @@
 
 	const areaGenerator = d3.area(d => xScale(d.date),
 		d => yScale(0),
-		d => yScale(d.value)).curve(d3.curveStep)
+		d => yScale(d.valueProgression)).curve(d3.curveStep)
 		.defined(d => d.date)
 
-	const plots = canvas.selectAll("path").data()
+	const plots = canvas.selectAll("path").data(Array.from(valueChangePerStatusId).sort((a, b) => a[0] - b[0]))
 			.enter()
 			.append("path")
 			.attr("class", "plot")
