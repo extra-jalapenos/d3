@@ -86,10 +86,10 @@
 				const change = d3.sum(D[1].map(d => d.value))
 				valueProgression += change
 				flatProgressionArray.push({ date: D[0], statusId, value: change, valueProgression })
-				return { date: D[0], value: change, valueProgression }
+				return [ D[0], { value: change, valueProgression }]
 			})
 
-		valueChangePerStatusId.set(statusId, valueChangePerDay)
+		valueChangePerStatusId.set(statusId, new d3.InternMap(valueChangePerDay))
 	}
 
 	const distinctDates = d3.union(flatProgressionArray.map(d => [d.date, { value: d.value }]).sort((a, b) => a[0] - b[0]))
@@ -101,12 +101,41 @@
 	// first, fill fact dates
 	for (const entriesForStatus of referenceMap) {
 		const [statusKeyString, dateMap] = entriesForStatus
+
+		let runningSum = 0
 		for (const dateKey of dateMap) {
 			const [date, obj] = dateKey
-
+			if (valueChangePerStatusId.get(Number(statusKeyString)).has(date)) {
+				const dataPoint = valueChangePerStatusId.get(Number(statusKeyString)).get(date)
+				runningSum += dataPoint.value
+				dateMap.set(date, { value: dataPoint.value, valueProgression: runningSum })
+			} else {
+				dateMap.set(date, { value: 0, valueProgression: runningSum })
+			}
 		}
 	}
 
+	for (const entriesForStatus of referenceMap) {
+	const [statusKeyString, dateMap] = entriesForStatus
+		let lastKnownDatapoint = { value: 0, valueProgression: 0 }
+		for (const dateKey of dateMap) {
+			const [date, obj] = dateKey
+			// now we're stacking
+			if (valueChangePerStatusId.get(Number(statusKeyString)).has(date)) {
+				const dataPoint = valueChangePerStatusId.get(Number(statusKeyString)).get(date)
+				lastKnownDatapoint = { ...dataPoint }
+			}
+
+			if (Number(statusKeyString) === 0) {
+				dateMap.set(date, { ...lastKnownDatapoint, stackStart: 0, stackEnd: lastKnownDatapoint.valueProgression })
+			} else {
+				const earlierSeriesAtSameDate = valueChangePerStatusId.get(Number(statusKeyString) - 1).get(date)
+				dateMap.set(date, { ...lastKnownDatapoint, stackStart: 0 + earlierSeriesAtSameDate.valueProgression, stackEnd: lastKnownDatapoint.valueProgression + earlierSeriesAtSameDate.valueProgression })
+			}
+		}
+	}
+
+	console.log(referenceMap)
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
 		.append("g")
