@@ -39,14 +39,12 @@
 	.sort((a, b) => a.date < b.date)
 
 
-	// calculate the
-	const distinctStatus = statusMap.map(status => String(status.id))
-
 	const refYear = Number(d3.mode(rawData, d => d.referenceYear))
 	const minDate = d3.min(rawData, d => new Date(d.doneAt))
 
 	// to calculate the progression, we'll need to group by audit
 	const sortedWorklogsByAuditId = d3.groups(worklogsByDateAsc, d => d.auditId)
+
 	const progressionData = sortedWorklogsByAuditId.map(auditIdGroup => {
 		const [auditId, auditWorklogs] = auditIdGroup
 
@@ -78,8 +76,7 @@
 	// now we make a fucking map over the time range
 	const flatProgressionArray = []
 
-	const statusIdIterator = valueChangePerStatusId.keys()
-	for (const statusId of statusIdIterator) {
+	for (const statusId of valueChangePerStatusId.keys()) {
 		const entriesInStatus = valueChangePerStatusId.get(statusId)
 
 		let valueProgression = 0
@@ -95,8 +92,20 @@
 		valueChangePerStatusId.set(statusId, valueChangePerDay)
 	}
 
-	const distinctDates = d3.union(flatProgressionArray.map(d => d.date))
+	const distinctDates = d3.union(flatProgressionArray.map(d => [d.date, { value: d.value }]).sort((a, b) => a[0] - b[0]))
 	// go through all dates and if there's no value for an ID set its value to 0
+	const distinctDatesInternMap = new d3.InternMap(distinctDates)
+
+
+	const referenceMap = new d3.InternMap(statusMap.map(status => [String(status.id), distinctDatesInternMap]))
+	// first, fill fact dates
+	for (const entriesForStatus of referenceMap) {
+		const [statusKeyString, dateMap] = entriesForStatus
+		for (const dateKey of dateMap) {
+			const [date, obj] = dateKey
+
+		}
+	}
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
 	const canvas = svg
@@ -113,7 +122,7 @@
 	xScale.clamp(true)
 
 	const yScale = d3.scaleLinear()
-		.domain([0, 3000])
+		.domain([0, sortedWorklogsByAuditId.length])
 		.range([height - margin.bottom, 0])
 
 
@@ -149,7 +158,7 @@
 			.attr("class", "plot")
 			.attr("id", (d, i) => i)
 			.attr("fill", (d, i) => colorScale(i))
-			.attr("opacity", 1)
+			.attr("opacity", 0.5)
 			.attr("stroke", (d, i) => colorScale(i))
 			.attr("d", d => areaGenerator(d[1]))
 	</script>
