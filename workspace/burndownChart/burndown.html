@@ -13,6 +13,8 @@
 
 		body {
 			background-color: #ebebeb;
+			font-family: Arial, Helvetica, sans-serif;
+			font-size: smaller;
 		}
 
 	</style>
@@ -20,7 +22,7 @@
 <body>
 	<script type="module">
 
-	const height = 500
+	const height = 550
 	const width = 1000
 	const svg = d3.select("body")
 		.append("svg")
@@ -58,7 +60,16 @@
 
 		// define hurdles
 		const hurdles = [
-			"Tourenplanung", "VB II", "Termin", "NB I", "Fertigstellung", "Prüfung", "Freigabe", "Versand", "Rechnung", "Zahlung"
+			"Tourenplanung",
+			"VB II",
+			"Termin",
+			"NB I",
+			"Fertigstellung",
+			"Prüfung",
+			"Freigabe",
+			"Versand",
+			"Rechnung",
+			"Zahlung"
 		]
 
 		const hurdleDates = condensed.filter(worklog => hurdles.includes(worklog.workstep.stepName))
@@ -71,7 +82,6 @@
 			}))
 
 		// everything else is just contacting the client
-
 		const contactDates = condensed.filter(worklog => hurdles.includes(worklog.workstep.stepName) === false)
 
 		// get VB Is: before Tourenplanung
@@ -91,15 +101,27 @@
 			}
 		}
 
-		const NBIIMatches = contactDates.filter(worklog => worklog.date >= worklogMap.get("Termin") && worklog.date <= worklogMap.get("Fertigstellung"))
+		const NBIIMatches = contactDates.filter(worklog => worklog.date >= worklogMap.get("NB I") && worklog.date <= worklogMap.get("Fertigstellung"))
 		if (NBIIMatches.length) {
 			timeline.set("NB II", d3.min(NBIIMatches, d => d.date))
 		}
 
 		// we're not sorting shit, we're frankensteining this together
 		const finalArray = 	[
-			"VB I", "Tourenplanung", "VB II", "Termin", "NB I", "NB II", "Fertigstellung", "Prüfung", "Freigabe", "Versand", "Rechnung", "Zahlung"
-		].map(stepName => [stepName, timeline.get(stepName)]).filter(stepAndDateTuple => !!stepAndDateTuple[1])
+			"VB I",
+			"Tourenplanung",
+			"VB II",
+			"Termin",
+			"NB I",
+			"NB II",
+			"Fertigstellung",
+			"Prüfung",
+			"Freigabe",
+			"Versand",
+			"Rechnung",
+			"Zahlung"
+		].map(stepName => [stepName, timeline.get(stepName)])
+		.filter(stepAndDateTuple => !!stepAndDateTuple[1])
 		return finalArray
 	}
 
@@ -122,6 +144,7 @@
 				previousStatus = tuple[0]
 				return statusChange
 			})
+
 			sortedWorklogsByAuditId.set(auditId, progression.flat())
 		}
 	})
@@ -173,7 +196,7 @@
 
 	}
 
-	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
+	const margin = { left: 50, top: 10, bottom: 14*20 + 10, right: 10 }
 	const canvas = svg
 		.append("g")
 		.attr("class", "canvas")
@@ -205,7 +228,7 @@
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 		.call(d3.axisLeft(yScale))
 
-	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, 14])
+	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
 
 	const areaGenerator = d3.area(d => xScale(d.date), d => yScale(d.stackStart), d => yScale(d.stackEnd))
 
@@ -215,7 +238,7 @@
 			.attr("class", "plot")
 			.attr("id", (d) => d)
 			.attr("id", (d, i) => i)
-			.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex() + "99")
+			.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex()+"ee")
 			.attr("stroke", (d, i) => colorScaleAlt(i))
 			.attr("d", d => areaGenerator(d[1]))
 
@@ -240,6 +263,31 @@
 									.attr("class", "markerLine")
 									.attr("stroke", "black")
 									.attr("d", d => markerGenerator([{ x: d, y: yScale.domain()[0] }, { x: d, y: yScale.domain()[1] }]))
+
+	const legend = svg.append("g").attr("class", "legend").attr("transform", `translate(${margin.left}, ${height + margin.top - margin.bottom + 20 })`)
+
+	const entries = legend.selectAll("g")
+	.data(statusOrder)
+	.enter()
+	.append("g")
+	.attr("name", d => d)
+
+	const colorBoxSize = 7
+	const colorBoxes = entries
+		.append("rect")
+		.attr("fill", (d, i) => colorScaleAlt(i))
+		.attr("height", colorBoxSize)
+		.attr("width", colorBoxSize)
+		.attr("y", (d, i) => i * colorBoxSize*1.5)
+		.attr("x", 0)
+
+	const text = entries
+		.append("text")
+		.attr("fill", "black")
+		.attr("text-anchor", "start")
+		.text(d => d)
+		.attr("y", (d, i) => (i + 0.75) * colorBoxSize*1.5)
+		.attr("x", 15)
 	</script>
 </body>
 </html>
