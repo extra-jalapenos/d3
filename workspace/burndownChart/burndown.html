@@ -142,10 +142,35 @@
 			.map(D => {
 				const change = D[1]
 				valueProgression += change
-				return [ D[0], { value: change, valueProgression }]
+				return [ D[0], { date: D[0], status: statusId, value: change, valueProgression }]
 			})
 
 		valueChangePerStatusId.set(statusId, valueChangePerDay)
+	}
+
+	const statusOrder = ["Beginn", "VB I", "Tourenplanung", "VB II", "Termin", "NB I", "NB II", "Fertigstellung", "Prüfung", "Freigabe", "Versand", "Rechnung", "Zahlung"]
+	const lastKnownState = new d3.InternMap(statusOrder.map(key => [key, { value: 0, valueProgression: 0 }]))
+	const byDate = d3.rollups(Array.from(valueChangePerStatusId.values()).flat().map(D => D[1]).sort((a, b) => a.date - b.date), D => new d3.InternMap(D.map(d => [d.status, d])), d => d.date)
+
+	for (const dateStack of byDate) {
+		const [dateKey, InternMap] = dateStack
+		// add empty values
+		let dayStackSum = 0
+		statusOrder.forEach(status => {
+			if (InternMap.has(status) === false) {
+				InternMap.set(status, { status, date: dateKey, value: 0, valueProgression: lastKnownState.get(status).valueProgression })
+			} else {
+			lastKnownState.set(status, { ...InternMap.get(status) })
+			}
+
+			// stacking!
+			const currentVal = InternMap.get(status)
+			InternMap.set(status, { ...currentVal, stackStart: dayStackSum, stackEnd: dayStackSum + currentVal.valueProgression })
+			dayStackSum += currentVal.valueProgression
+		})
+
+		dateStack[1] = Array.from(InternMap.values())
+
 	}
 
 	const margin = { left: 50, top: 10, bottom: 50, right: 10 }
@@ -165,7 +190,7 @@
 	const yScale = d3.scaleLinear()
 		.domain([0, sortedWorklogsByAuditId.size])
 		.range([height - margin.bottom, 0])
-
+		.nice()
 
 	axes
 		.append("g")
@@ -180,7 +205,7 @@
 		.call(d3.axisLeft(yScale))
 
 	const colorScale = d3.scaleOrdinal([
-		...d3.schemeGreys[4],
+		...d3.schemeReds[4].reverse(),
 		"green",
 		...d3.schemeBlues[4],
 		"rebeccapurple",
@@ -188,18 +213,18 @@
 		...d3.schemeOranges[4]
 	])
 
-	const areaGenerator = d3.area(d => xScale(d[0]), d => yScale(0), d => yScale(d[1].valueProgression))
-		.curve(d3.curveStep)
+	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, 14])
 
-	const plots = canvas.selectAll("path").data(valueChangePerStatusId)
+	const areaGenerator = d3.area(d => xScale(d.date), d => yScale(d.stackStart), d => yScale(d.stackEnd))
+
+	const plots = canvas.selectAll("path").data(d3.group(byDate.map(D => D[1]).flat(), d => d.status))
 			.enter()
 			.append("path")
 			.attr("class", "plot")
 			.attr("id", (d) => d)
 			.attr("id", (d, i) => i)
-			.attr("fill", (d, i) => colorScale(i))
-			.attr("opacity", 0.5)
-			.attr("stroke", (d, i) => colorScale(i))
+			.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex() + "99")
+			.attr("stroke", (d, i) => colorScaleAlt(i))
 			.attr("d", d => areaGenerator(d[1]))
 	</script>
 </body>
