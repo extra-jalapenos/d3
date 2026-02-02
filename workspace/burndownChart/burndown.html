@@ -198,20 +198,12 @@
 		.attr("transform", `translate(${margin.left}, ${height + margin.top - margin.bottom})`)
 		.call(d3.axisBottom(xScale))
 
+
 	axes
 		.append("g")
 		.attr("class", "y axis")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`)
 		.call(d3.axisLeft(yScale))
-
-	const colorScale = d3.scaleOrdinal([
-		...d3.schemeReds[4].reverse(),
-		"green",
-		...d3.schemeBlues[4],
-		"rebeccapurple",
-		"black",
-		...d3.schemeOranges[4]
-	])
 
 	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, 14])
 
@@ -226,6 +218,28 @@
 			.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex() + "99")
 			.attr("stroke", (d, i) => colorScaleAlt(i))
 			.attr("d", d => areaGenerator(d[1]))
+
+	// adding markers for relevant lines
+	const relevantDates = [
+		new Date(refYear, 6, 31), // Meilenstein 1 Ende Juli
+		new Date(refYear+1, 0, 1), // Neujahr
+		new Date(refYear+1, 0, 15), // Bayernwerk-Abrechnungen
+		new Date(refYear+1, 1, 28) // Frist
+	]
+	const markerGroup = svg
+		.append("g")
+		.attr("class", "relevant-dates")
+		.attr("transform", `translate(${margin.left}, ${margin.top})`)
+
+	const markerGenerator = d3.line().x(d => xScale(d.x)).y(d => yScale(d.y))
+	const markers = markerGroup.selectAll("g").data(relevantDates)
+									.enter()
+									.append("g")
+									.attr("id", d => d.toLocaleDateString("de-DE"))
+									.append("path")
+									.attr("class", "markerLine")
+									.attr("stroke", "black")
+									.attr("d", d => markerGenerator([{ x: d, y: yScale.domain()[0] }, { x: d, y: yScale.domain()[1] }]))
 	</script>
 </body>
 </html>
