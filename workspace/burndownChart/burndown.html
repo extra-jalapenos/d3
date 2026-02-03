@@ -27,7 +27,11 @@
 	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./Export.txt")
 
-	const worklogsByDateAsc = rawData.map(d => {
+	const filtered = rawData
+		.filter(d => d.auditId.includes("operational") === false) // get rid of operationalTraining
+		.filter(d => d.auditId.slice(0, 4) !== "2024")	// get rid of 2024 because there's little data
+
+	const worklogsByDateAsc = filtered.map(d => {
 		const [day, month, year] = d.doneAt.split(" ")[0].split(".").map(digit => Number(digit))
 		if (!statusLookup.get(d.workstep)) throw Error("missing workstep " + d.workstep)
 		return { referenceYear: Number(d.auditId.slice(0, 4)),
@@ -36,8 +40,8 @@
 		date: new Date(year, month-1, day),
 		dateStr: String(new Date(year, month-1, day))}
 	}).filter(d => String(new Date(d.dateStr)) !== "Invalid Date")
-	.sort((a, b) => a.date - b.date)
-	.sort((a, b) => a.referenceYear - b.referenceYear)
+	.sort((a, b) => b.date - a.date)
+	.sort((a, b) => b.referenceYear - a.referenceYear)
 
 	const groupedByReferenceYear = d3.group(worklogsByDateAsc, d => d.referenceYear)
 
@@ -203,61 +207,74 @@
 		groupedByReferenceYear.set(refYear, byDate)
 	}
 
-	const height = document.documentElement.clientHeight / 3
+	const heightOf100Audits = 10;
+	const height = document.documentElement.clientHeight
 	const width = document.documentElement.clientWidth
 
-	const margin = { left: 50, top: 10, bottom: 30, right: 10 }
-	const svgs = d3.select("body")
-		.selectAll("svg")
-		.data(groupedByReferenceYear).enter()
-		.append("svg")
-		.attr("width", "100%")
-		.attr("height", "100%")
-		.attr("viewBox", `0, 0, ${width}, ${height}`)
+	const canvasMargin = { left: 50, top: 10, bottom: 30, right: 10 }
+	d3.select("body")
+		.attr("height", height)
+		.attr("width", width)
+		.attr("viewBox", d => `0, 0, ${width}, ${height}`)
 		.attr("preserveAspectRatio", "none")
 
-	const canvasses = svgs.append("g")
-		.attr("class", "canvas")
-		.attr("name", d => d[0])
-		.attr("width", width - margin.left - margin.right)
-		.attr("height", height - margin.top - margin.bottom)
-		.attr("transform", (d, i) => `translate(${margin.left}, ${margin.top + height})`)
+	const svgs = d3.select("body")
+		.selectAll("svg")
+		.data(groupedByReferenceYear)
+		.enter()
+		.append("svg")
 
-	svgs.append("g").attr("class", "axes").attr("name", d => d[0])
-
-	const axGroups = d3.selectAll("g.axes")
 	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
 
 	svgs.each(function (datum) {
-		const axGroup = d3.select(this).select("g.axes");
+		const currentSVG = d3.select(this)
+		const amountOfAudits = datum[1][0][1].find(item => item.status === "Zahlung").stackEnd
+		const canvasHeight = Math.ceil(amountOfAudits / 100) * heightOf100Audits
+
+		currentSVG
+			.attr("width", width)
+			.attr("height", canvasHeight + canvasMargin.top + canvasMargin.bottom)
+
+		currentSVG
+			.append("g")
+			.attr("class", "canvas")
+			.attr("name", d => d[0])
+			.attr("width", width - canvasMargin.left - canvasMargin.right)
+			.attr("height", canvasHeight)
+			.attr("transform", (d, i) => `translate(${canvasMargin.left}, ${canvasMargin.top})`)
+
+		const axGroup = d3.select(this).append("g").attr("class", "axes").attr("name", d => d[0])
 
 		const xScale = d3.scaleTime()
 			.domain([new Date(datum[0], 0, 1), new Date(datum[0] + 1, 5, 30)])
-			.range([0, width - margin.left - margin.right])
+			.range([0, width - canvasMargin.left - canvasMargin.right])
 
 		xScale.clamp(true)
 
 		const yScale = d3.scaleLinear()
-			.domain([0, 3000])
-			.range([height - margin.bottom, 0])
+			.domain([0, Math.ceil(amountOfAudits / 100) * 100])
+			.range([canvasHeight, 0])
 			.nice()
 
 		d3.select(this)
 			.append("g")
 			.attr("class", datum => "x axis " + datum[0])
-			.attr("transform", `translate(${margin.left}, ${height + margin.top - margin.bottom})`)
+			.attr("transform", `translate(${canvasMargin.left}, ${canvasHeight + canvasMargin.top})`)
 			.call(d3.axisBottom(xScale))
 
 		d3.select(this)
 			.append("g")
 			.attr("class", datum => "y axis " + datum[0])
-			.attr("transform", `translate(${margin.left}, ${margin.top})`)
+			.attr("transform", `translate(${canvasMargin.left}, ${canvasMargin.top})`)
 			.call(d3.axisLeft(yScale))
 
 		const areaGenerator = d3.area(d => xScale(d.date), d => yScale(d.stackStart), d => yScale(d.stackEnd))
 		const [refYear, valueProgression] = datum
-		const plots = canvasses.selectAll("path")
-				.data(valueProgression)
+		const byStatusID = d3.group(valueProgression.map(D => D[1]).flat(), d => d.status)
+
+		const plots = d3.select(this).select("g.canvas")
+				.selectAll("path")
+				.data(statusOrder)
 				.enter()
 				.append("path")
 				.attr("class", "plot")
@@ -265,7 +282,7 @@
 				.attr("id", (d, i) => i)
 				.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex()+"ee")
 				.attr("stroke", (d, i) => colorScaleAlt(i))
-				.attr("d", d => areaGenerator(d[1]))
+				.attr("d", d => areaGenerator(byStatusID.get(d)))
 
 		// adding markers for relevant lines
 		const relevantDates = [
@@ -278,7 +295,7 @@
 		const markerGroup = d3.select(this)
 			.append("g")
 			.attr("class", "relevant-dates")
-			.attr("transform", `translate(${margin.left}, ${margin.top})`)
+			.attr("transform", `translate(${canvasMargin.left}, ${canvasMargin.top})`)
 
 		const markerGenerator = d3.line().x(d => xScale(d.x)).y(d => yScale(d.y))
 		const markers = markerGroup.selectAll("g").data(relevantDates)
@@ -294,7 +311,7 @@
 	const legend = d3.select("body")
 		.append("g")
 		.attr("class", "legend")
-		.attr("transform", `translate(${margin.left}, ${-10})`)
+		.attr("transform", `translate(${canvasMargin.left}, ${-10})`)
 
 	const entries = legend.selectAll("g")
 		.data(statusOrder)
