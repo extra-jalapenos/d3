@@ -38,6 +38,54 @@
 	const statusLookup = d3.index(statusMap, d => d.stepName)
 	const rawData = await d3.tsv("./Export.txt")
 
+	const auditTypeGroups = {
+		"vawsVerification": "AwSV",
+		"vaws": "AwSV",
+		"betrSichV": "BetrSichV",
+		"eeg2009": "EEG",
+		"biomethan2009": "EEG",
+		"redIIRecert": "Managementsysteme",
+		"woodGasificationEeg2012": "EEG",
+		"tfFollowup": "EEG",
+		"vawsJgs": "AwSV",
+		"redIIMonitor": "Managementsysteme",
+		"heatingPlant": "EEG",
+		"facility75KwEeg2014": "EEG",
+		"proofOfOrigin": "EEG",
+		"eeg2012": "EEG",
+		"electricityTax": "Managementsysteme",
+		"redII": "Managementsysteme",
+		"biomethan2012": "EEG",
+		"woodGasification": "EEG",
+		"biomethanFeed": "EEG",
+		"facility75KwEeg2017": "EEG",
+		"heatingPlantEeg2012": "EEG",
+		"flexpraemie": "EEG",
+		"facility75Kw": "EEG",
+		"emas": "Managementsysteme",
+		"auditDIN": "Managementsysteme",
+		"enms": "Managementsysteme",
+		"certificationISO14001": "Managementsysteme",
+		"fw308": "EEG",
+		"eeg2012Waste": "EEG",
+		"plantoilBhkw": "EEG",
+		"operationalTraining": "Other",
+		"fw309": "EEG",
+		"powerOnDemand": "EEG",
+		"wasteManagementFacility": "Managementsysteme",
+		"facility75KwEeg2021": "EEG",
+		"betrSichVVerification": "BetrSichV",
+		"proofOfHighEfficiency": "EEG",
+		"tfFirst": "EEG",
+		"cradle2Cradle": "Other",
+		"eeg2017Waste": "EEG",
+		"biomethan2017": "EEG",
+		"eeg2014": "EEG",
+		"directMarketing": "EEG",
+		"eeg2012First": "EEG",
+		"redIIPost": "Managementsysteme"
+	}
+
 	const filtered = rawData
 		.filter(d => d.auditId.includes("operational") === false) // get rid of operationalTraining
 		.filter(d => d.auditId.slice(0, 4) !== "2024")	// get rid of 2024 because there's little data
@@ -223,6 +271,10 @@
 	const height = document.documentElement.clientHeight
 	const width = document.documentElement.clientWidth
 	const canvasMargin = { left: 50, top: 10, bottom: 30, right: 50 }
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateRgbBasis(["#ef7300", "#e2aa00", "#79ba55", "#57acd1"])).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateWarm).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateRainbow).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateSpectral).domain([0, statusOrder.length])
 	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
 
 	d3.select("body")
@@ -257,6 +309,9 @@
 
 		const axGroup = d3.select(this).append("g").attr("class", "axes").attr("name", d => d[0])
 
+		// x-Achse hier formatieren, datum[0] ist das Referenzjahr
+		// Monate sind nullindiziert
+		// geht standardmäßig von 1.1.Refjahr -> 30.06.Folgejahr
 		const xScale = d3.scaleTime()
 			.domain([new Date(datum[0], 0, 1), new Date(datum[0] + 1, 5, 30)])
 			.range([0, width - canvasMargin.left - canvasMargin.right])
