@@ -14,7 +14,18 @@
 		body {
 			background-color: #ebebeb;
 			font-family: Arial, Helvetica, sans-serif;
-			font-size: smaller;
+		}
+
+		.title {
+			font-weight: bold;
+			font-size: 1.25em;
+			fill: white;
+			opacity: 0.8;
+		}
+
+		.dates {
+			font-size: 0.8em;
+			font-weight: bold;
 		}
 
 	</style>
@@ -30,6 +41,7 @@
 	const filtered = rawData
 		.filter(d => d.auditId.includes("operational") === false) // get rid of operationalTraining
 		.filter(d => d.auditId.slice(0, 4) !== "2024")	// get rid of 2024 because there's little data
+		.filter(d => d.auditId.slice(0, 4) !== "2012")	// get rid of 2012 because there's little data
 
 	const worklogsByDateAsc = filtered.map(d => {
 		const [day, month, year] = d.doneAt.split(" ")[0].split(".").map(digit => Number(digit))
@@ -210,8 +222,9 @@
 	const heightOf100Audits = 10;
 	const height = document.documentElement.clientHeight
 	const width = document.documentElement.clientWidth
+	const canvasMargin = { left: 50, top: 10, bottom: 30, right: 50 }
+	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
 
-	const canvasMargin = { left: 50, top: 10, bottom: 30, right: 10 }
 	d3.select("body")
 		.attr("height", height)
 		.attr("width", width)
@@ -224,7 +237,6 @@
 		.enter()
 		.append("svg")
 
-	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
 
 	svgs.each(function (datum) {
 		const currentSVG = d3.select(this)
@@ -252,9 +264,9 @@
 		xScale.clamp(true)
 
 		const yScale = d3.scaleLinear()
-			.domain([0, Math.ceil(amountOfAudits / 100) * 100])
+			.domain([0, Math.ceil(amountOfAudits / 200) * 200])
 			.range([canvasHeight, 0])
-			.nice()
+
 
 		d3.select(this)
 			.append("g")
@@ -266,7 +278,7 @@
 			.append("g")
 			.attr("class", datum => "y axis " + datum[0])
 			.attr("transform", `translate(${canvasMargin.left}, ${canvasMargin.top})`)
-			.call(d3.axisLeft(yScale))
+			.call(d3.axisLeft(yScale).ticks(Math.ceil(amountOfAudits / 200)))
 
 		const areaGenerator = d3.area(d => xScale(d.date), d => yScale(d.stackStart), d => yScale(d.stackEnd))
 		const [refYear, valueProgression] = datum
@@ -284,6 +296,14 @@
 				.attr("stroke", (d, i) => colorScaleAlt(i))
 				.attr("d", d => areaGenerator(byStatusID.get(d)))
 
+
+		const title = d3.select(this)
+			.append("text")
+			.attr("class", "title")
+			.text("Referenzjahr " + datum[0])
+			.attr("transform", `translate(${canvasMargin.left * 1.25}, ${canvasHeight})`)
+			.attr("text-anchor", "start")
+
 		// adding markers for relevant lines
 		const relevantDates = [
 			new Date(refYear, 6, 31), // Meilenstein 1 Ende Juli
@@ -295,46 +315,66 @@
 		const markerGroup = d3.select(this)
 			.append("g")
 			.attr("class", "relevant-dates")
-			.attr("transform", `translate(${canvasMargin.left}, ${canvasMargin.top})`)
 
 		const markerGenerator = d3.line().x(d => xScale(d.x)).y(d => yScale(d.y))
-		const markers = markerGroup.selectAll("g").data(relevantDates)
+		const markers = markerGroup
+			.selectAll("g")
+			.data(relevantDates)
 			.enter()
 			.append("g")
+			.attr("transform", d => `translate(${canvasMargin.left + xScale(d)}, ${canvasMargin.top})`)
 			.attr("id", d => d.toLocaleDateString("de-DE"))
+
+		markers
 			.append("path")
 			.attr("class", "markerLine")
 			.attr("stroke", "black")
-			.attr("d", d => markerGenerator([{ x: d, y: yScale.domain()[0] }, { x: d, y: yScale.domain()[1] }]))
+			.attr("d", d => markerGenerator([{ x: 0, y: yScale.domain()[0] }, { x: 0, y: yScale.domain()[1] }]))
+
+		markers
+			.append("text")
+			.attr("class", "dates")
+			.text(d => d.toLocaleDateString(["de-DE"]))
+			.attr("x", -canvasHeight/2)
+			.attr("y", -2)
+			.attr("text-anchor", "middle")
+			.attr("transform", "rotate(-90)")
 	})
 
-	const legend = d3.select("body")
+
+	const legend = d3.select("svg")
 		.append("g")
 		.attr("class", "legend")
-		.attr("transform", `translate(${canvasMargin.left}, ${-10})`)
+		.attr("width", 100)
+		.attr("height", 100)
+		.attr("transform", `translate(${width - 50}, ${25})`)
 
-	const entries = legend.selectAll("g")
+
+	const entries = d3.select("g.legend").selectAll("g")
 		.data(statusOrder)
 		.enter()
 		.append("g")
 		.attr("name", d => d)
 
-	const colorBoxSize = 7
+	const colorBoxSize = 10
 	const colorBoxes = entries
 		.append("rect")
 		.attr("fill", (d, i) => colorScaleAlt(i))
-		.attr("height", 200)
-		.attr("width", 200)
-		.attr("y", (d, i) => i * colorBoxSize*1.5)
-		.attr("x", 20)
+		.attr("height", colorBoxSize)
+		.attr("width", colorBoxSize)
+		.attr("y", (d, i) => (i - 0.5) * colorBoxSize * 1.5 )
+		.attr("x", -colorBoxSize)
 
 	const text = entries
 		.append("text")
 		.attr("fill", "black")
-		.attr("text-anchor", "start")
+		.attr("text-anchor", "end")
+		.attr("height", colorBoxSize * 1.5)
+		.attr("alignment-baseline", "baseline")
 		.text(d => d)
-		.attr("y", (d, i) => (i + 0.75) * colorBoxSize*1.5)
-		.attr("x", 15)
+		.attr("y", (d, i) => i * colorBoxSize * 1.5)
+		.attr("x", -colorBoxSize - 5)
+
 	</script>
 </body>
 </html>
