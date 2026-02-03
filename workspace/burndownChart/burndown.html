@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Burndown Chart</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+	<style>
+		html, body {
+			margin: 0;
+			padding: 0
+		}
+
+		body {
+			background-color: #ebebeb;
+			font-family: Arial, Helvetica, sans-serif;
+		}
+
+		.title {
+			font-weight: bold;
+			font-size: 1.25em;
+			fill: white;
+			opacity: 0.8;
+		}
+
+		.dates {
+			font-size: 0.8em;
+			font-weight: bold;
+		}
+
+	</style>
+</head>
+<body>
+	<script type="module">
+
+	const statusMap = await d3.tsv("./steps.tsv")
+	const statusOrder = ["Beginn", "VB I", "Tourenplanung", "VB II", "Termin", "NB I", "NB II", "Fertigstellung", "Prüfung", "Freigabe", "Versand", "Rechnung", "Zahlung"]
+	const statusLookup = d3.index(statusMap, d => d.stepName)
+	const rawData = await d3.tsv("./Export.txt")
+
+	const auditTypeGroups = {
+		"vawsVerification": "AwSV",
+		"vaws": "AwSV",
+		"betrSichV": "BetrSichV",
+		"eeg2009": "EEG",
+		"biomethan2009": "EEG",
+		"redIIRecert": "Managementsysteme",
+		"woodGasificationEeg2012": "EEG",
+		"tfFollowup": "EEG",
+		"vawsJgs": "AwSV",
+		"redIIMonitor": "Managementsysteme",
+		"heatingPlant": "EEG",
+		"facility75KwEeg2014": "EEG",
+		"proofOfOrigin": "EEG",
+		"eeg2012": "EEG",
+		"electricityTax": "Managementsysteme",
+		"redII": "Managementsysteme",
+		"biomethan2012": "EEG",
+		"woodGasification": "EEG",
+		"biomethanFeed": "EEG",
+		"facility75KwEeg2017": "EEG",
+		"heatingPlantEeg2012": "EEG",
+		"flexpraemie": "EEG",
+		"facility75Kw": "EEG",
+		"emas": "Managementsysteme",
+		"auditDIN": "Managementsysteme",
+		"enms": "Managementsysteme",
+		"certificationISO14001": "Managementsysteme",
+		"fw308": "EEG",
+		"eeg2012Waste": "EEG",
+		"plantoilBhkw": "EEG",
+		"operationalTraining": "Other",
+		"fw309": "EEG",
+		"powerOnDemand": "EEG",
+		"wasteManagementFacility": "Managementsysteme",
+		"facility75KwEeg2021": "EEG",
+		"betrSichVVerification": "BetrSichV",
+		"proofOfHighEfficiency": "EEG",
+		"tfFirst": "EEG",
+		"cradle2Cradle": "Other",
+		"eeg2017Waste": "EEG",
+		"biomethan2017": "EEG",
+		"eeg2014": "EEG",
+		"directMarketing": "EEG",
+		"eeg2012First": "EEG",
+		"redIIPost": "Managementsysteme"
+	}
+
+	const filtered = rawData
+		.filter(d => d.auditId.includes("operational") === false) // get rid of operationalTraining
+		.filter(d => d.auditId.slice(0, 4) !== "2024")	// get rid of 2024 because there's little data
+		.filter(d => d.auditId.slice(0, 4) !== "2012")	// get rid of 2012 because there's little data
+
+	const worklogsByDateAsc = filtered.map(d => {
+		const [day, month, year] = d.doneAt.split(" ")[0].split(".").map(digit => Number(digit))
+		if (!statusLookup.get(d.workstep)) throw Error("missing workstep " + d.workstep)
+		return { referenceYear: Number(d.auditId.slice(0, 4)),
+		auditId: d.auditId,
+		workstep: statusLookup.get(d.workstep),
+		date: new Date(year, month-1, day),
+		dateStr: String(new Date(year, month-1, day))}
+	}).filter(d => String(new Date(d.dateStr)) !== "Invalid Date")
+	.sort((a, b) => b.date - a.date)
+	.sort((a, b) => b.referenceYear - a.referenceYear)
+
+	const groupedByReferenceYear = d3.group(worklogsByDateAsc, d => d.referenceYear)
+
+	// great, let's process each referenceYear
+	for (const referenceYearBatch of groupedByReferenceYear) {
+		const [refYear, rawDataBatch] = referenceYearBatch
+		const minDate = d3.min(rawDataBatch, d => d.date)
+
+		// to calculate the progression, we'll need to group by audit
+		const sortedWorklogsByAuditId = d3.group(rawDataBatch, d => d.auditId)
+
+		const processLogs = (worklogArray) => {
+
+			// if (worklogArray.length === 1) return []
+			const condensed = worklogArray.map(worklog => {
+				const { date, workstep } = worklog
+				return { date, workstep }
+			})
+
+			// make a map of the earliest occurences of all listed steps
+			const worklogMap = new d3.rollup(condensed,
+				D => d3.min(D.map(d => d.date)),
+				d => d.workstep.stepName
+			)
+
+			// define hurdles
+			const hurdles = [
+				"Tourenplanung",
+				"VB II",
+				"Termin",
+				"NB I",
+				"Fertigstellung",
+				"Prüfung",
+				"Freigabe",
+				"Versand",
+				"Rechnung",
+				"Zahlung"
+			]
+
+			const hurdleDates = condensed.filter(worklog => hurdles.includes(worklog.workstep.stepName))
+			// loop through and increase date if below previous
+			let previousDate = null
+			const timeline = new d3.InternMap(hurdles.filter(hurdleName => worklogMap.has(hurdleName)) // relevantHurdles in order
+				.map(hurdleName => {
+					if (worklogMap.get(hurdleName) > previousDate) previousDate = worklogMap.get(hurdleName)
+					return [hurdleName, previousDate]
+				}))
+
+			// everything else is just contacting the client
+			const contactDates = condensed.filter(worklog => hurdles.includes(worklog.workstep.stepName) === false)
+
+			// get VB Is: before Tourenplanung
+			const VBIMatches = contactDates.filter(worklog => worklog.date <= worklogMap.get("Tourenplanung"))
+			if (VBIMatches.length) {
+				timeline.set("VB I", d3.min(VBIMatches, d => d.date))
+			}
+
+			// VB I done between set audit date and audit counts as VB II
+			const VBIIMatches = contactDates.filter(worklog => worklog.date >= worklogMap.get("Tourenplanung") &&  worklog.date <= worklogMap.get("Termin"))
+			if (VBIIMatches.length) {
+				const earliestMatch = d3.min(VBIIMatches, d => d.date)
+				if (worklogMap.has("VB II")) {
+					timeline.set("VB II", d3.min([worklogMap.get("VB II"), earliestMatch]))
+				} else {
+					timeline.set("VB II", earliestMatch)
+				}
+			}
+
+			const NBIIMatches = contactDates.filter(worklog => worklog.date >= worklogMap.get("NB I") && worklog.date <= worklogMap.get("Fertigstellung"))
+			if (NBIIMatches.length) {
+				timeline.set("NB II", d3.min(NBIIMatches, d => d.date))
+			}
+
+			// we're not sorting shit, we're frankensteining this together
+			const finalArray = 	[
+				"VB I",
+				"Tourenplanung",
+				"VB II",
+				"Termin",
+				"NB I",
+				"NB II",
+				"Fertigstellung",
+				"Prüfung",
+				"Freigabe",
+				"Versand",
+				"Rechnung",
+				"Zahlung"
+			].map(stepName => [stepName, timeline.get(stepName)])
+			.filter(stepAndDateTuple => !!stepAndDateTuple[1])
+			return finalArray
+		}
+
+		sortedWorklogsByAuditId.keys().forEach(auditId => {
+			const logs = sortedWorklogsByAuditId.get(auditId)
+			if (!logs) throw Error(auditId)
+			const cleanedLogs = processLogs(logs)
+			// now make the whole slew of "+1 -1" etc out of em
+			if (logs.length >= 1) {
+				let previousStatus = null
+				const progression = [["Beginn", minDate], ...cleanedLogs].map(tuple => {
+					if (previousStatus === null) {
+						previousStatus = tuple[0]
+						return { statusName: tuple[0], date: tuple[1], valueChange: 1 }
+					}
+					const statusChange = [
+						{ statusName: previousStatus, date: tuple[1], valueChange: -1 },
+						{ statusName: tuple[0], date: tuple[1], valueChange: 1 }
+					]
+					previousStatus = tuple[0]
+					return statusChange
+				})
+
+				sortedWorklogsByAuditId.set(auditId, progression.flat())
+			}
+		})
+
+		// add a running value to each statusId
+
+		// first, group per statusID
+		const valueChangePerStatusId = d3.group(Array.from(sortedWorklogsByAuditId.values()).flat(),
+			d => d.statusName)
+
+		for (const statusId of valueChangePerStatusId.keys()) {
+			const entriesInStatus = valueChangePerStatusId.get(statusId)
+
+			let valueProgression = 0
+			const valueChangePerDay = d3.rollups(entriesInStatus, D => d3.sum(D.map(d => d.valueChange)), d => d.date)
+				.sort((D1, D2) => D1[0] - D2[0])
+				.map(D => {
+					const change = D[1]
+					valueProgression += change
+					return [ D[0], { date: D[0], status: statusId, value: change, valueProgression }]
+				})
+
+			valueChangePerStatusId.set(statusId, valueChangePerDay)
+		}
+
+		const lastKnownState = new d3.InternMap(statusOrder.map(key => [key, { value: 0, valueProgression: 0 }]))
+		const byDate = d3.rollups(Array.from(valueChangePerStatusId.values()).flat()
+		.map(D => D[1])
+		.sort((a, b) => a.date - b.date), D => new d3.InternMap(D.map(d => [d.status, d])), d => d.date)
+
+		for (const dateStack of byDate) {
+			const [dateKey, InternMap] = dateStack
+			// add empty values
+			let dayStackSum = 0
+			statusOrder.forEach(status => {
+				if (InternMap.has(status) === false) {
+					InternMap.set(status, { status, date: dateKey, value: 0, valueProgression: lastKnownState.get(status).valueProgression })
+				} else {
+				lastKnownState.set(status, { ...InternMap.get(status) })
+				}
+
+				// stacking!
+				const currentVal = InternMap.get(status)
+				InternMap.set(status, { ...currentVal, stackStart: dayStackSum, stackEnd: dayStackSum + currentVal.valueProgression })
+				dayStackSum += currentVal.valueProgression
+			})
+
+			dateStack[1] = Array.from(InternMap.values())
+		}
+
+		groupedByReferenceYear.set(refYear, byDate)
+	}
+
+	const heightOf100Audits = 10;
+	const height = document.documentElement.clientHeight
+	const width = document.documentElement.clientWidth
+	const canvasMargin = { left: 50, top: 10, bottom: 30, right: 50 }
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateRgbBasis(["#ef7300", "#e2aa00", "#79ba55", "#57acd1"])).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateWarm).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateRainbow).domain([0, statusOrder.length])
+	// const colorScaleAlt = d3.scaleSequential(d3.interpolateSpectral).domain([0, statusOrder.length])
+	const colorScaleAlt = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, statusOrder.length])
+
+	d3.select("body")
+		.attr("height", height)
+		.attr("width", width)
+		.attr("viewBox", d => `0, 0, ${width}, ${height}`)
+		.attr("preserveAspectRatio", "none")
+
+	const svgs = d3.select("body")
+		.selectAll("svg")
+		.data(groupedByReferenceYear)
+		.enter()
+		.append("svg")
+
+
+	svgs.each(function (datum) {
+		const currentSVG = d3.select(this)
+		const amountOfAudits = datum[1][0][1].find(item => item.status === "Zahlung").stackEnd
+		const canvasHeight = Math.ceil(amountOfAudits / 100) * heightOf100Audits
+
+		currentSVG
+			.attr("width", width)
+			.attr("height", canvasHeight + canvasMargin.top + canvasMargin.bottom)
+
+		currentSVG
+			.append("g")
+			.attr("class", "canvas")
+			.attr("name", d => d[0])
+			.attr("width", width - canvasMargin.left - canvasMargin.right)
+			.attr("height", canvasHeight)
+			.attr("transform", (d, i) => `translate(${canvasMargin.left}, ${canvasMargin.top})`)
+
+		const axGroup = d3.select(this).append("g").attr("class", "axes").attr("name", d => d[0])
+
+		// x-Achse hier formatieren, datum[0] ist das Referenzjahr
+		// Monate sind nullindiziert
+		// geht standardmäßig von 1.1.Refjahr -> 30.06.Folgejahr
+		const xScale = d3.scaleTime()
+			.domain([new Date(datum[0], 0, 1), new Date(datum[0] + 1, 5, 30)])
+			.range([0, width - canvasMargin.left - canvasMargin.right])
+
+		xScale.clamp(true)
+
+		const yScale = d3.scaleLinear()
+			.domain([0, Math.ceil(amountOfAudits / 200) * 200])
+			.range([canvasHeight, 0])
+
+
+		d3.select(this)
+			.append("g")
+			.attr("class", datum => "x axis " + datum[0])
+			.attr("transform", `translate(${canvasMargin.left}, ${canvasHeight + canvasMargin.top})`)
+			.call(d3.axisBottom(xScale))
+
+		d3.select(this)
+			.append("g")
+			.attr("class", datum => "y axis " + datum[0])
+			.attr("transform", `translate(${canvasMargin.left}, ${canvasMargin.top})`)
+			.call(d3.axisLeft(yScale).ticks(Math.ceil(amountOfAudits / 200)))
+
+		const areaGenerator = d3.area(d => xScale(d.date), d => yScale(d.stackStart), d => yScale(d.stackEnd))
+		const [refYear, valueProgression] = datum
+		const byStatusID = d3.group(valueProgression.map(D => D[1]).flat(), d => d.status)
+
+		const plots = d3.select(this).select("g.canvas")
+				.selectAll("path")
+				.data(statusOrder)
+				.enter()
+				.append("path")
+				.attr("class", "plot")
+				.attr("id", (d) => d)
+				.attr("id", (d, i) => i)
+				.attr("fill", (d, i) => d3.color(colorScaleAlt(i)).formatHex()+"ee")
+				.attr("stroke", (d, i) => colorScaleAlt(i))
+				.attr("d", d => areaGenerator(byStatusID.get(d)))
+
+
+		const title = d3.select(this)
+			.append("text")
+			.attr("class", "title")
+			.text("Referenzjahr " + datum[0])
+			.attr("transform", `translate(${canvasMargin.left * 1.25}, ${canvasHeight})`)
+			.attr("text-anchor", "start")
+
+		// adding markers for relevant lines
+		const relevantDates = [
+			new Date(refYear, 6, 31), // Meilenstein 1 Ende Juli
+			new Date(refYear+1, 0, 1), // Neujahr
+			new Date(refYear+1, 0, 15), // Bayernwerk-Abrechnungen
+			new Date(refYear+1, 1, 28) // Frist
+		]
+
+		const markerGroup = d3.select(this)
+			.append("g")
+			.attr("class", "relevant-dates")
+
+		const markerGenerator = d3.line().x(d => xScale(d.x)).y(d => yScale(d.y))
+		const markers = markerGroup
+			.selectAll("g")
+			.data(relevantDates)
+			.enter()
+			.append("g")
+			.attr("transform", d => `translate(${canvasMargin.left + xScale(d)}, ${canvasMargin.top})`)
+			.attr("id", d => d.toLocaleDateString("de-DE"))
+
+		markers
+			.append("path")
+			.attr("class", "markerLine")
+			.attr("stroke", "black")
+			.attr("d", d => markerGenerator([{ x: 0, y: yScale.domain()[0] }, { x: 0, y: yScale.domain()[1] }]))
+
+		markers
+			.append("text")
+			.attr("class", "dates")
+			.text(d => d.toLocaleDateString(["de-DE"]))
+			.attr("x", -canvasHeight/2)
+			.attr("y", -2)
+			.attr("text-anchor", "middle")
+			.attr("transform", "rotate(-90)")
+	})
+
+
+	const legend = d3.select("svg")
+		.append("g")
+		.attr("class", "legend")
+		.attr("width", 100)
+		.attr("height", 100)
+		.attr("transform", `translate(${width - 50}, ${25})`)
+
+
+	const entries = d3.select("g.legend").selectAll("g")
+		.data(statusOrder)
+		.enter()
+		.append("g")
+		.attr("name", d => d)
+
+	const colorBoxSize = 10
+	const colorBoxes = entries
+		.append("rect")
+		.attr("fill", (d, i) => colorScaleAlt(i))
+		.attr("height", colorBoxSize)
+		.attr("width", colorBoxSize)
+		.attr("y", (d, i) => (i - 0.5) * colorBoxSize * 1.5 )
+		.attr("x", -colorBoxSize)
+
+	const text = entries
+		.append("text")
+		.attr("fill", "black")
+		.attr("text-anchor", "end")
+		.attr("height", colorBoxSize * 1.5)
+		.attr("alignment-baseline", "baseline")
+		.text(d => d)
+		.attr("y", (d, i) => i * colorBoxSize * 1.5)
+		.attr("x", -colorBoxSize - 5)
+
+	</script>
+</body>
+</html>
